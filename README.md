@@ -1,3 +1,3 @@
 # SiFoundation
 
-A description of this package.
+Swift utils and usefull extentions.
