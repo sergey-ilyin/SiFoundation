@@ -26,6 +26,6 @@ let package = Package(
             dependencies: []),
         .testTarget(
             name: "SiFoundationTests",
-            dependencies: ["SiFoundation"]),
+            dependencies: ["SiFoundation"]), 
     ]
 )
