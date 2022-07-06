@@ -15,10 +15,10 @@ public class HttpServer
       // MARK: - askRawData
 
       /// Инициирует запрос данных к серверу, вызывает замыкание с передачей туда результата
-      public static func askRawData(
+      @discardableResult public static func askRawData(
             urlRequest: URLRequest,
             then callback: @escaping CallbackWith<Data>
-      ) -> Void
+      ) -> URLSessionDataTask
       {
             let urlStr = ( urlRequest.url?.description ).nilToEmpty
 
@@ -66,28 +66,33 @@ public class HttpServer
                   }
             )
             task.resume()
+            return task
       }
 
       // MARK: - askObject
 
       /// Запрашивает с сервера объект и передаёт его (или ошибку) в указанное замыкание
-      public static func askObject<__Object: Decodable>(
+      @discardableResult public static func askObject<__Object: Decodable>(
             urlString: String,
             then callback: @escaping CallbackWith<__Object>
-      ) -> Void
+      ) -> URLSessionDataTask?
       {
             off( "\( ENTERED ) with urlString = \( urlString )." )
             defer { off( "\( EXITED )." ) } // будет вызвано в любом случае
 
             guard let _url = URL( string: urlString )
-            else { return callback( .failure( HttpServerError.InvalidURL( urlString ) ) ) }
+            else
+            {
+                  callback( .failure( HttpServerError.InvalidURL( urlString ) ) )
+                  return nil
+            }
 
             var request = URLRequest( url: _url )
             request.httpMethod = "GET"
             request.timeoutInterval = 60 * 20 // секунд * минут
 
             // запрашиваем сырые данные
-            askRawData(
+            let task = askRawData(
                   urlRequest: request,
                   then:
                   { ( _result: ResultWith<Data> ) in
@@ -109,10 +114,11 @@ public class HttpServer
                                     let decodeResult = Result( catching: { try SmartJSONDecoder.decode( __Object.self, from: _rawData ) } )
 
                                     callbackDebugged( decodeResult, debugContext )
-                              }
-                  }
-            )
-      }
+                              } // end of .onSuccess
+                  } // end of then:
+            ) // end of askRawData
+            return task
+      } // end of func
 
       // MARK: - saveObject
 
@@ -173,15 +179,15 @@ public class HttpServer
                               guard let _responseBody = String( data: _data, encoding: .utf8 )
                               else { return callbackDebugged( .failure( HttpServerError.CannotConvertAnswerToString ), debugContext ) }
 
-                              debugLog( " Response Body: \( _responseBody.quoted )" )
+                              debugLog( "Response Body: \( _responseBody.quoted )" )
                         }
 
                         // здесь всё хорошо:
                         callbackDebugged( .success( () ), debugContext )
-                  }
-            )
+                  } // end of completionHandler:
+            ) // end of dataTask
             task.resume()
-      }
+      } // end of func
 
       // MARK: - uploadImage
 
@@ -204,7 +210,7 @@ public class HttpServer
             // начинаем заполнять запрос:
             var request = URLRequest( url: _url )
             request.httpMethod = "POST"
-            request.setValue( _imageData.count.asString , forHTTPHeaderField: "Content-Length" ) // TODO: проверить: возможно это не нужно
+            request.setValue( _imageData.count.asString, forHTTPHeaderField: "Content-Length" ) // TODO: проверить: возможно это не нужно
 
             // готовим и выполняем задачу с запросом:
             let task = URLSession.shared.uploadTask(
@@ -241,11 +247,11 @@ public class HttpServer
 
                         // здесь всё хорошо:
                         callbackDebugged( .success( () ), debugContext )
-                  }
-            )
+                  } // end of completionHandler:
+            ) // end of uploadTask
 
             task.resume()
-      }
+      } // end of func
 
       // MARK: - uploadVideo
 
@@ -309,21 +315,13 @@ public class HttpServer
                                     guard $0.notEmpty
                                     else { return callbackDebugged( .failure( HttpServerError.InvalidResponse( _responseBody ) ), debugContext ) } // TODO: более корректное сообщение
 
-                                    callbackDebugged( .success( $0[ 0 ] ) , debugContext )
-                              }
-
-                        /*
-                         guard decodeResult.notEmpty
-                         else { return callbackDebugged( .failure( HttpServerError.InvalidResponse( _responseBody ) ), debugContext ) }
-
-                         // здесь всё хорошо:
-                         callbackDebugged( decodeResult, debugContext )
-                         */
-                  }
-            )
+                                    callbackDebugged( .success( $0[ 0 ] ), debugContext )
+                              } // end of .onSuccess
+                  } // end of completionHandler:
+            ) // end of uploadMultipartTask
 
             task.resume()
-      }
+      } // end of func
 
       // MARK: - delete
 
@@ -353,7 +351,7 @@ public class HttpServer
                         _result
                               .onFailure { callbackDebugged( .failure( $0 ), debugContext ) }
                               .onSuccess { _ in callbackDebugged( .success( () ), debugContext ) } // ответное тело значения не имеет.
-                  }
-            )
-      }
+                  } // end of then:
+            ) // end of askRawData
+      } // end of func
 }
